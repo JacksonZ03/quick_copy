@@ -18,8 +18,8 @@ mkdir -p "$DEST_DIR"
 # Function to compute MD5 hash of a file
 get_file_hash() {
     local file=$1
-    dd if="$file" bs=1M count=1 2>/dev/null | md5 -q  # For macOS
-    # dd if="$file" bs=1M count=1 2>/dev/null | md5sum | awk '{ print $1 }'  # For Linux
+    dd if="$file" bs=1M count=1 2>/dev/null | md5 -q  # For macOS - hashes the first 1MB of the file
+    # dd if="$file" bs=1M count=1 2>/dev/null | md5sum | awk '{ print $1 }'  # For Linux - hashes the first 1MB of the file
 }
 
 # Function to check if a file is a video using ffprobe
@@ -106,23 +106,17 @@ for file in "${filtered_files[@]}"; do
     echo "$(basename "$file")"
 done
 
-read -p "Do you want to copy all the files? (y(yes)/n(no)/e(exit)): " user_response
-if [[ "$user_response" == "e" ]]; then
-    echo "Exiting."
-    rm "$DEST_HASHES_FILE"
-    osascript -e "tell application \"Terminal\" to close (every window whose id is $TERMINAL_WINDOW_ID)" & exit 0
-elif [[ "$user_response" == "y" ]]; then # Copy all
-    files_to_copy=("${filtered_files[@]}")
-else
-    files_to_copy=()
+files_to_copy=()
+if [ ${#filtered_files[@]} -gt 1 ]; then
+    # If there are multiple filtered files, ask the user which ones to copy
     for src_file in "${filtered_files[@]}"; do # Prompt the user to copy each filtered file
-        read -p "Do you want to copy $(basename "$src_file")? (y(yes)/a(yes to all)/n(no)/i(ignore the rest)/e (exit)): " user_response
+        read -p "Do you want to copy $(basename "$src_file")? [y/n/a(yes to all)/i(ignore this and the rest)/e(exit)]: " user_response
         case "$user_response" in
             y)
-                files_to_copy+=("$src_file")
+                files_to_copy+=("$src_file") # Copy this file
                 ;;
             a)
-                files_to_copy+=("${filtered_files[@]}")
+                files_to_copy+=("${filtered_files[@]}") # Copy all files
                 break
                 ;;
             n)
@@ -140,22 +134,51 @@ else
                 ;;
         esac
     done
+else
+    # If there is only one filtered file, ask the user if they want to copy it
+    src_file="${filtered_files[0]}"
+    read -p "Do you want to copy $(basename "$src_file")? [y/n/e(exit)]: " user_response
+    case "$user_response" in
+        y)
+            files_to_copy+=("$src_file") # Copy this file
+            ;;
+        e)
+            echo "Exiting."
+            rm "$DEST_HASHES_FILE"
+            osascript -e "tell application \"Terminal\" to close (every window whose id is $TERMINAL_WINDOW_ID)" & exit 0
+            ;;
+        *)
+            echo "Invalid option. Skipping this file." # TODO: Make this ask the user again rather than skipping
+            ;;
+    esac
 fi
 
-# Confirm the list of files to copy
-echo "You have chosen to copy the following files:"
-for file in "${files_to_copy[@]}"; do
-    echo "$(basename "$file")"
-done
+# Check if there are files to copy
+if [ ${#files_to_copy[@]} -gt 0 ]; then
+    # If there is more than one file, ask for confirmation
+    if [ ${#files_to_copy[@]} -gt 1 ]; then
+        echo "You have chosen to copy the following files:"
+        for file in "${files_to_copy[@]}"; do
+            echo "$(basename "$file")"
+        done
 
-read -p "Do you want to proceed with copying these files? (y/n): " final_confirmation
-if [[ "$final_confirmation" == "y" ]]; then
-    for src_file in "${files_to_copy[@]}"; do
-        echo "Copying $src_file to $DEST_DIR"
+        read -p "Do you want to proceed with copying these files? [y/n]: " final_confirmation
+        if [[ "$final_confirmation" == "y" ]]; then
+            for src_file in "${files_to_copy[@]}"; do
+                echo "Copying $src_file to $DEST_DIR"
+                pv "$src_file" > "$DEST_DIR/${src_file##*/}"
+            done
+        else
+            echo "Copying aborted."
+        fi
+    else
+        # Only one file to copy, proceed without asking for confirmation
+        src_file="${files_to_copy[0]}"
+        echo "Copying $(basename "$src_file") to $DEST_DIR"
         pv "$src_file" > "$DEST_DIR/${src_file##*/}"
-    done
+    fi
 else
-    echo "Copying aborted."
+    echo "No new video files to copy."
 fi
 
 # Clean up temporary file

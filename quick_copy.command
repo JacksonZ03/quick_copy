@@ -89,6 +89,10 @@ for src_file in "$SOURCE_DIR"/*; do
     fi
 done
 
+# Sort filtered files by modification time, most recent first
+IFS=$'\n' filtered_files=($(ls -t "${filtered_files[@]}"))
+unset IFS
+
 # Check if there are any filtered files to copy
 if [ ${#filtered_files[@]} -eq 0 ]; then
     echo "No new video files to copy."

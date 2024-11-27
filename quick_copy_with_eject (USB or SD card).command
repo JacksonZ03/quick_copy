@@ -205,7 +205,13 @@ echo "Script completed. Press Enter to exit."
 read -r
 
 # Eject the SD card
-diskutil eject /Volumes/Untitled
+diskutil eject "/Volumes/Untitled"
+
+#Check if NO NAME is mounted
+if [ -d "/Volumes/NO NAME" ]; then
+    # Eject the NO NAME disk
+    diskutil eject "/Volumes/NO NAME"
+fi
 
 # Close the Terminal after pressing Enter
 osascript -e "tell application \"Terminal\" to close (every window whose id is $TERMINAL_WINDOW_ID)" & exit 0
